@@ -1,0 +1,75 @@
+image: docker:20.10.16
+
+variables:
+  DOCKER_HOST: tcp://docker:2375
+  DOCKER_TLS_CERTDIR: ""
+
+services:
+  - docker:20.10.16-dind
+
+#stages de pipelines
+stages:
+  - build_push_images
+  - deploy_dev
+  - deploy_prod
+
+build:
+  before_script:
+    - docker login -u $DOCKERHUB_USER --password-stdin
+  rules:
+    - if: $CI_COMMIT_BRANCH == "dev"
+      variables: 
+        IMAGE_TAG: "dev"
+    - if: $CI_COMMIT_BRANCH == "main"
+      variables: 
+        IMAGE_TAG: "prod"
+  stage: build_push_images
+  tags:
+    - dockerfinal
+  script:
+    - export IMAGE_TAG=$IMAGE_TAG
+    - export DOCKERHUB_USER=$DOCKERHUB_USER
+    - docker-compose -f docker-compose-build.yml build --parallel
+    - docker push $DOCKERHUB_USER/result:$IMAGE_TAG
+    - docker push $DOCKERHUB_USER/seed-data:$IMAGE_TAG
+    - docker push $DOCKERHUB_USER/vote:$IMAGE_TAG
+    - docker push $DOCKERHUB_USER/worker:$IMAGE_TAG
+
+deploy-dev:
+  rules:
+   - if: $CI_COMMIT_BRANCH == "dev"
+  stage: deploy_dev
+  tags:
+    - dockerfinal
+  before_script:
+    - chmod 400 $SSH_PRIVATE_KEY
+  # On copie notre docker compose sur la machine dinstant 
+    - scp -o StrictHostKeyChecking=no -i $SSH_PRIVATE_KEY docker-compose.yml ubuntu@ec2-3-90-57-39.compute-1.amazonaws.com:/home/ubuntu
+  script:
+    - ssh -o StrictHostKeyChecking=no -i $SSH_PRIVATE_KEY ubuntu@ec2-3-90-57-39.compute-1.amazonaws.com 
+      "ls &&
+      docker compose down &&
+      docker compose up -d &&
+      docker images &&
+      docker ps"
+
+deploy-prod:
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+  stage: deploy_prod
+  #exucter le script manuellement
+  #rules:
+    #when: manual
+  tags:
+    - dockerfinal
+  before_script:
+    - chmod 400 $SSH_PRIVATE_KEY
+  # On copie notre docker compose sur la machine dinstant 
+    - scp  -o StrictHostKeyChecking=no -i $SSH_PRIVATE_KEY docker-compose.yml ubuntu@ec2-54-165-241-218.compute-1.amazonaws.com:/home/ubuntu
+  script:
+    - ssh -o StrictHostKeyChecking=no -i $SSH_PRIVATE_KEY ubuntu@ec2-54-165-241-218.compute-1.amazonaws.com/ 
+      "ls &&
+      docker compose down &&
+      docker compose up -d &&
+      docker images &&
+      docker ps"

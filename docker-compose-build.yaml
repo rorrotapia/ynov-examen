@@ -1,0 +1,18 @@
+version: "3"
+services:
+  result:
+    build:
+        context: ./result
+    image: $DOCKERHUB_USER/result:$IMAGE_TAG
+  seed-data:
+    build:
+      context: ./seed-data
+    image: $DOCKERHUB_USER/seed-data:$IMAGE_TAG
+  vote:
+    build:
+      context: ./vote
+    image: $DOCKERHUB_USER/vote:$IMAGE_TAG
+  worker:
+    build:
+        context: ./worker
+    image: $DOCKERHUB_USER/worker:$IMAGE_TAG
